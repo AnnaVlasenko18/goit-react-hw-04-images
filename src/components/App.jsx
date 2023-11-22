@@ -1,4 +1,4 @@
-import { Component } from 'react';
+import { useEffect, useState } from 'react';
 import { Searchbar } from './Searchbar/Searchbar';
 import { fetchPhotos } from 'Api';
 import { ImageGallery } from './ImageGallery/ImageGallery';
@@ -6,92 +6,73 @@ import { Button } from './Button/Button';
 import { ThreeDots } from 'react-loader-spinner';
 import css from './App.module.css';
 
-export class App extends Component {
-  state = {
-    gallery: [],
-    query: '',
-    page: 1,
-    totalPages: null,
-    isLoading: false,
-    error: null,
-  };
+export const App = () => {
+  const [gallery, setGallery] = useState([]);
+  const [query, setQuery] = useState('');
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
 
-  async componentDidUpdate(prevProps, prevState) {
-    const { query, page } = this.state;
-
-    if (page !== prevState.page || query !== prevState.query) {
+  useEffect(() => {
+    if (query === '') {
+      return;
+    }
+    async function handleFetch() {
       try {
-        this.setState({ isLoading: true });
-        const fetch = await fetchPhotos(query, page);
+        setIsLoading(true);
+        const { hits, totalHits } = await fetchPhotos(query, page);
 
-        this.setState(prevState => {
-          const { hits, totalHits } = fetch;
+        setGallery(prevImg => [...prevImg, ...hits]);
 
-          return {
-            gallery: [...prevState.gallery, ...hits],
-            isLoading: false,
-            totalPages: Math.ceil(totalHits / 12),
-          };
-        });
+        setTotalPages(Math.ceil(totalHits / 12));
       } catch (error) {
-        this.setState({ error, isLoading: false });
+        setError(true);
+      } finally {
+        setIsLoading(false);
       }
     }
-  }
+    handleFetch();
+  }, [query, page]);
 
-  handleSubmit = value => {
-    return this.setState({
-      query: value.query,
-      page: 1,
-      gallery: [],
-      totalPages: null,
-    });
+  const handleSubmit = ({ query }) => {
+    setQuery(query);
+    setPage(1);
+    setGallery([]);
+    setTotalPages(null);
   };
 
-  handleLoadMore = () => {
-    this.setState(prevState => {
-      return {
-        page: prevState.page + 1,
-      };
-    });
+  const handleLoadMore = () => {
+    setPage(prevPage => prevPage + 1);
   };
 
-  render() {
-    const { isLoading, gallery, page, totalPages, error } = this.state;
-    const galleryImages = gallery.length !== 0;
-    const notLastPage = page < totalPages;
+  return (
+    <div className={css.appContainer}>
+      <Searchbar onSubmit={handleSubmit}></Searchbar>
 
-    return (
-      <div className={css.appContainer}>
-        <Searchbar onSubmit={this.handleSubmit}></Searchbar>
-
-        {error && (
+      {error && (
+        <p className={css.message}>
+          Oops, something went wrong, please try again later.
+        </p>
+      )}
+      {gallery.length !== 0 && <ImageGallery gallery={gallery}></ImageGallery>}
+      {isLoading && (
+        <ThreeDots
+          height="80"
+          width="80"
+          color="#303f9f"
+          ariaLabel="three-dots-loading"
+          visible={true}
+        />
+      )}
+      {gallery.length !== 0 &&
+        (page < totalPages ? (
+          <Button onClick={handleLoadMore} btnName="Load more"></Button>
+        ) : (
           <p className={css.message}>
-            Oops, something went wrong, please try again later.
+            We're sorry, but you've reached the end of search results.
           </p>
-        )}
-
-        {isLoading && (
-          <ThreeDots
-            height="80"
-            width="80"
-            color="#303f9f"
-            ariaLabel="three-dots-loading"
-            visible={true}
-          />
-        )}
-
-        {galleryImages && <ImageGallery gallery={gallery}></ImageGallery>}
-
-        {galleryImages &&
-          (notLastPage ? (
-            <Button onClick={this.handleLoadMore} btnName="Load more"></Button>
-          ) : (
-            <p className={css.message}>
-              We're sorry, but you've reached the end of search results.
-            </p>
-          ))}
-      </div>
-    );
-  }
-}
+        ))}
+    </div>
+  );
+};
